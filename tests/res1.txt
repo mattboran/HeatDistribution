@@ -1,0 +1,15 @@
+Experiment 1
+CPU version
+Time taken for CPU is 9.750000
+Time taken for CPU is 19.110000
+Time taken for CPU is 35.300000
+Time taken for CPU is 67.320000
+Time taken for CPU is 130.850000
+Time taken for CPU is 258.440000
+GPU version
+Time taken for GPU is 0.240000
+Time taken for GPU is 0.290000
+Time taken for GPU is 0.420000
+Time taken for GPU is 0.660000
+Time taken for GPU is 1.170000
+Time taken for GPU is 2.130000
