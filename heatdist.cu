@@ -1,10 +1,11 @@
 /*
  *  Please write your name and net ID below
  *  
- *  Last name:
- *  First name:
- *  Net ID: 
+ *  Last name: Boran
+ *  First name: Tudor
+ *  Net ID: N13059231
  * 
+ *  I have attached a readme, you can also compile with make (which I used to get this in nsight, because I love IDEs)
  */
 
 
@@ -27,12 +28,16 @@
 /* To index element (i,j) of a 2D array stored as 1D */
 #define index(i, j, N)  ((i)*(N)) + (j)
 
+/* Tile size */
+#define TILE_SIZE 8
+
 /*****************************************************************/
 
 // Function declarations: Feel free to add any functions you want.
 void  seq_heat_dist(float *, unsigned int, unsigned int);
 void  gpu_heat_dist(float *, unsigned int, unsigned int);
-
+__global__ void  gpu_kernel(float *, float *, unsigned int);
+void  check_err(cudaError_t, char *);
 
 /*****************************************************************/
 /**** Do NOT CHANGE ANYTHING in main() function ******/
@@ -167,9 +172,62 @@ void  seq_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 /* This function can call one or more kernels if you want ********************/
 void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 {
-  
-  
-  
+
+
+	// number of bytes to be copied between array temp and array playground
+	size_t count = N*N;
+	unsigned int num_bytes = count*sizeof(float);
+	unsigned int i;
+
+	float *d_temp = NULL, *d_playground = NULL;
+
+	/* Dynamically allocate another array for temp values */
+	/* Dynamically allocate NxN array of floats */
+	cudaError_t err;
+	err = cudaMalloc((void**)&d_temp, num_bytes);
+	err = cudaMalloc((void**)&d_playground, num_bytes);
+	check_err(err, "allocating memory on device.");
+
+	err = cudaMemcpy(d_temp, playground, count*sizeof(float), cudaMemcpyHostToDevice);
+	err = cudaMemcpy(d_playground, playground, count*sizeof(float), cudaMemcpyHostToDevice);
+	check_err(err, "copying array to device memory.");
+
+	dim3 block(TILE_SIZE, TILE_SIZE, 1);
+	dim3 grid(N/TILE_SIZE, N/TILE_SIZE, 1);
+	for (i = 0; i < iterations; i++){
+		gpu_kernel<<<grid, block>>>(d_playground, d_temp, N);
+		err = cudaMemcpy(d_playground, d_temp, count*sizeof(float), cudaMemcpyDeviceToDevice);
+		check_err(err, "syncing array");
+	}
+
+	err = cudaMemcpy(playground, d_playground, count*sizeof(float), cudaMemcpyDeviceToHost);
+	check_err(err, "copying array back to host.");
+}
+
+__global__
+void gpu_kernel(float *d_playground, float *d_temp, unsigned int N)
+{
+	unsigned int upper = N;
+	unsigned int i, j;
+	i = blockIdx.x*blockDim.x + threadIdx.x;
+	j = blockIdx.y*blockDim.y + threadIdx.y;
+
+	if (i > 0 && i < upper && j > 0 && j < upper)
+	{
+		d_temp[index(i,j,N)] = (d_playground[index(i-1,j,N)] +
+				d_playground[index(i+1,j,N)] +
+				d_playground[index(i,j-1,N)] +
+				d_playground[index(i,j+1,N)])/4.0;
+	}
+}
+
+void  check_err(cudaError_t err, char *msg)
+{
+	if (err != cudaSuccess)
+	{
+		fprintf(stderr, "CUDA Error: %s\n", msg);
+		exit(1);
+	}
 }
 
 
