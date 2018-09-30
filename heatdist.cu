@@ -29,7 +29,7 @@
 #define index(i, j, N)  ((i)*(N)) + (j)
 
 /* Tile size */
-#define TILE_SIZE 8
+#define BLOCK_WIDTH 8
 
 /*****************************************************************/
 
@@ -37,7 +37,7 @@
 void  seq_heat_dist(float *, unsigned int, unsigned int);
 void  gpu_heat_dist(float *, unsigned int, unsigned int);
 __global__ void  gpu_kernel(float *, float *, unsigned int);
-void  check_err(cudaError_t, char *);
+void  check_err(cudaError_t, const char *);
 
 /*****************************************************************/
 /**** Do NOT CHANGE ANYTHING in main() function ******/
@@ -192,8 +192,8 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 	err = cudaMemcpy(d_playground, playground, count*sizeof(float), cudaMemcpyHostToDevice);
 	check_err(err, "copying array to device memory.");
 
-	dim3 block(TILE_SIZE, TILE_SIZE, 1);
-	dim3 grid(N/TILE_SIZE, N/TILE_SIZE, 1);
+	dim3 block(BLOCK_WIDTH, BLOCK_WIDTH, 1);
+	dim3 grid(N/BLOCK_WIDTH, N/BLOCK_WIDTH, 1);
 	for (i = 0; i < iterations; i++){
 		gpu_kernel<<<grid, block>>>(d_playground, d_temp, N);
 		err = cudaMemcpy(d_playground, d_temp, count*sizeof(float), cudaMemcpyDeviceToDevice);
@@ -212,6 +212,7 @@ void gpu_kernel(float *d_playground, float *d_temp, unsigned int N)
 	i = blockIdx.x*blockDim.x + threadIdx.x;
 	j = blockIdx.y*blockDim.y + threadIdx.y;
 
+	// If we're on a top border block only do
 	if (i > 0 && i < upper && j > 0 && j < upper)
 	{
 		d_temp[index(i,j,N)] = (d_playground[index(i-1,j,N)] +
@@ -221,7 +222,7 @@ void gpu_kernel(float *d_playground, float *d_temp, unsigned int N)
 	}
 }
 
-void  check_err(cudaError_t err, char *msg)
+void  check_err(cudaError_t err, const char *msg)
 {
 	if (err != cudaSuccess)
 	{
