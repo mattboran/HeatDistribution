@@ -36,8 +36,10 @@
 // Function declarations: Feel free to add any functions you want.
 void  seq_heat_dist(float *, unsigned int, unsigned int);
 void  gpu_heat_dist(float *, unsigned int, unsigned int);
-__global__ void  gpu_kernel(float *, float *, unsigned int);
 void  check_err(cudaError_t, const char *);
+__global__ void  gpu_heat_dist_kernel(float *, float *, unsigned int);
+__global__ void gpu_update_mem_kernel(float *, float *, unsigned int);
+
 
 /*****************************************************************/
 /**** Do NOT CHANGE ANYTHING in main() function ******/
@@ -113,7 +115,6 @@ int main(int argc, char * argv[])
      end = clock();    
   }
   
-  
   time_taken = ((double)(end - start))/ CLOCKS_PER_SEC;
   
   printf("Time taken for %s is %lf\n", type_of_device == 0? "CPU" : "GPU", time_taken);
@@ -172,12 +173,10 @@ void  seq_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 /* This function can call one or more kernels if you want ********************/
 void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 {
-
-
 	// number of bytes to be copied between array temp and array playground
 	size_t count = N*N;
 	unsigned int num_bytes = count*sizeof(float);
-	unsigned int i;
+	unsigned int k;
 
 	float *d_temp = NULL, *d_playground = NULL;
 
@@ -193,26 +192,27 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 	check_err(err, "copying array to device memory.");
 
 	dim3 block(BLOCK_WIDTH, BLOCK_WIDTH, 1);
-	dim3 grid(N/BLOCK_WIDTH, N/BLOCK_WIDTH, 1);
-	for (i = 0; i < iterations; i++){
-		gpu_kernel<<<grid, block>>>(d_playground, d_temp, N);
-		err = cudaMemcpy(d_playground, d_temp, count*sizeof(float), cudaMemcpyDeviceToDevice);
-		check_err(err, "syncing array");
-	}
+	dim3 grid(N/BLOCK_WIDTH + 1, N/BLOCK_WIDTH + 1, 1);
+	for (k = 0; k < iterations; k++)
+	{
+		gpu_heat_dist_kernel<<<grid, block>>>(d_playground, d_temp, N);
+		cudaThreadSynchronize();
 
+		gpu_update_mem_kernel<<<grid, block>>>(d_playground, d_temp, N);
+		cudaThreadSynchronize();
+	}
 	err = cudaMemcpy(playground, d_playground, count*sizeof(float), cudaMemcpyDeviceToHost);
 	check_err(err, "copying array back to host.");
 }
 
 __global__
-void gpu_kernel(float *d_playground, float *d_temp, unsigned int N)
+void gpu_heat_dist_kernel(float *d_playground, float *d_temp, unsigned int N)
 {
-	unsigned int upper = N;
+	unsigned int upper = N-1;
 	unsigned int i, j;
 	i = blockIdx.x*blockDim.x + threadIdx.x;
 	j = blockIdx.y*blockDim.y + threadIdx.y;
 
-	// If we're on a top border block only do
 	if (i > 0 && i < upper && j > 0 && j < upper)
 	{
 		d_temp[index(i,j,N)] = (d_playground[index(i-1,j,N)] +
@@ -220,6 +220,16 @@ void gpu_kernel(float *d_playground, float *d_temp, unsigned int N)
 				d_playground[index(i,j-1,N)] +
 				d_playground[index(i,j+1,N)])/4.0;
 	}
+}
+
+__global__
+void gpu_update_mem_kernel(float *d_playground, float *d_temp, unsigned int N)
+{
+
+	int i = threadIdx.x + blockDim.x * blockIdx.x;
+	int j = threadIdx.y + blockDim.y * blockIdx.y;
+
+	d_playground[index(i, j, N)] = d_temp[index(i, j, N)];
 }
 
 void  check_err(cudaError_t err, const char *msg)
