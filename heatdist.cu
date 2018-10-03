@@ -28,7 +28,7 @@
 /* To index element (i,j) of a 2D array stored as 1D */
 #define index(i, j, N)  ((i)*(N)) + (j)
 
-/* Tile size */
+/* Block size = BLOCK_WIDTH*BLOCK_WIDTH */
 #define BLOCK_WIDTH 8
 
 /*****************************************************************/
@@ -38,7 +38,6 @@ void  seq_heat_dist(float *, unsigned int, unsigned int);
 void  gpu_heat_dist(float *, unsigned int, unsigned int);
 void  check_err(cudaError_t, const char *);
 __global__ void  gpu_heat_dist_kernel(float *, float *, unsigned int);
-__global__ void gpu_update_mem_kernel(float *, float *, unsigned int);
 
 
 /*****************************************************************/
@@ -183,7 +182,7 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 	/* Dynamically allocate NxN array of floats */
 	cudaError_t err;
 	err = cudaMalloc((void**)&d_playground, num_bytes);
-    /* Dynamically allocate another array for temp values */
+        /* Dynamically allocate another array for temp values */
 	err = cudaMalloc((void**)&d_temp, num_bytes);
 	check_err(err, "allocating memory on device.");
 
@@ -197,12 +196,12 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 	{
 		gpu_heat_dist_kernel<<<grid, block>>>(d_playground, d_temp, N);
 		cudaThreadSynchronize();
-        err = cudaMemcpy(d_playground, d_temp, cudaMemcpyDeviceToDevice);
+        	err = cudaMemcpy(d_playground, d_temp, count*sizeof(float),cudaMemcpyDeviceToDevice);
 	}
 	err = cudaMemcpy(playground, d_playground, count*sizeof(float), cudaMemcpyDeviceToHost);
 	check_err(err, "copying array back to host.");
-    cudaFree(d_playground);
-    cudaFree(d_temp);
+        cudaFree(d_playground);
+        cudaFree(d_temp);
 }
 
 __global__
@@ -220,16 +219,6 @@ void gpu_heat_dist_kernel(float *d_playground, float *d_temp, unsigned int N)
 				d_playground[index(i,j-1,N)] +
 				d_playground[index(i,j+1,N)])/4.0;
 	}
-}
-
-__global__
-void gpu_update_mem_kernel(float *d_playground, float *d_temp, unsigned int N)
-{
-
-	int i = blockDim.x*blockIdx.x + threadIdx.x;
-	int j = blockDim.y*blockIdx.y + threadIdx.y;
-
-	d_playground[index(i, j, N)] = d_temp[index(i, j, N)];
 }
 
 void  check_err(cudaError_t err, const char *msg)
