@@ -197,9 +197,7 @@ void  gpu_heat_dist(float * playground, unsigned int N, unsigned int iterations)
 	{
 		gpu_heat_dist_kernel<<<grid, block>>>(d_playground, d_temp, N);
 		cudaThreadSynchronize();
-
-		gpu_update_mem_kernel<<<grid, block>>>(d_playground, d_temp, N);
-		cudaThreadSynchronize();
+        err = cudaMemcpy(d_playground, d_temp, cudaMemcpyDeviceToDevice);
 	}
 	err = cudaMemcpy(playground, d_playground, count*sizeof(float), cudaMemcpyDeviceToHost);
 	check_err(err, "copying array back to host.");
